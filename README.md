@@ -8,7 +8,7 @@ Used for scheduling Pentaho Data Integration jobs on Carte Cluster
 - export PYTHONPATH="$PYTHONPATH:/path_to_myapp/myapp/myapp/"
 
 <b>Windows:</b><br>
-- set PYTHONPATH=%PYTHONPATH%;D:\LocalData\au00681\PycharmProjects\odometer_service
+- set PYTHONPATH=%PYTHONPATH%;D:\LocalData\au00681\PycharmProjects\carte-client
 
 <b>Update requirements:</b><br>
 - add the package name into `requirements.in`

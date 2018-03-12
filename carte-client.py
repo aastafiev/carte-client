@@ -83,6 +83,7 @@ async def main(conf: dict, num_try: int = 5) -> None:
             logging.info(f'Failed to run Job (attempt {idx+1})')
             raise SystemExit(f'Failed to run Job (attempt {idx+1})')
 
+
 if __name__ == '__main__':
     try:
         logging.getLogger('asyncio').setLevel(logging.INFO)
