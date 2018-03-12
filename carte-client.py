@@ -96,4 +96,3 @@ if __name__ == '__main__':
         loop.run_until_complete(main(CONFIG))
     except FileNotFoundError as err:
         sys.exit(str(err))
-
