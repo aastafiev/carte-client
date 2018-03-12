@@ -1,0 +1,12 @@
+carte-master:
+  url: http://10.216.20.31:8081
+  auth_login: cluster
+  auth_pass: cluster
+job-entry:
+  rep: HPZ440
+  user: admin
+  pass: password
+  level: Basic
+  job: /home/admin/services/odometer/Jobs/service_prediction
+other:
+  log_level: debug
