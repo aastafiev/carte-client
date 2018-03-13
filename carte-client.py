@@ -17,12 +17,17 @@ import xml.etree.ElementTree as ETree
 from typing import Tuple
 
 
-async def fetch(session: aiohttp.ClientSession, url: str, body: str) -> Tuple[str, str, str]:
+async def fetch(session: aiohttp.ClientSession, url: str, body: str) -> Tuple[str, int, str]:
     async with session.post(url=url, data=body) as response:
-        return await response.text(), response.status, response.reason
+        return await response.text(), int(response.status), response.reason
 
 
 async def main(conf: dict, num_try: int = 5) -> None:
+    def check_code(code: int, reason: str, task_desc: str):
+        if code != 200:
+            logging.debug(f'Fail to run task: {task_desc}. HTTP Reason: {reason}, HTTP Code {code}')
+            raise SystemExit(f'Fail to run task: {task_desc}. HTTP Reason: {reason}, HTTP Code {code}')
+
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     auth = aiohttp.BasicAuth(conf['carte-master']['auth_login'], conf['carte-master']['auth_pass'])
 
@@ -34,9 +39,7 @@ async def main(conf: dict, num_try: int = 5) -> None:
         logging.info(f"Running Job: HTTP POST -> {url_execute_job}, job -> {conf['job-entry']['job']}")
         req_execute_job = 'rep={rep}&job={job}&user={user}&pass={pass}&level={level}'.format(**conf['job-entry'])
         xml_run_job, http_code, http_reason = await fetch(session, url_execute_job, req_execute_job)
-        if http_code != 200:
-            logging.debug(f'HTTP Reason: {http_reason}, HTTP Code {http_code}')
-            raise SystemExit(f'HTTP Reason: {http_reason}, HTTP Code {http_code}')
+        check_code(http_code, http_reason, url_execute_job)
         xml_et = ETree.fromstring(xml_run_job)
         carte_result = xml_et.find('result').text
         carte_msg = xml_et.find('message').text
@@ -57,9 +60,7 @@ async def main(conf: dict, num_try: int = 5) -> None:
             logging.debug(f'Checking Job status (attempt {idx+1}): HTTP POST -> {url_job_status}, '
                           f'job -> {conf["job-entry"]["job"]}')
             xml_job_status, http_code, http_reason = await fetch(session, url_job_status, req_job_status)
-            if http_code != 200:
-                logging.debug(f'HTTP Reason: {http_reason}, HTTP Code {http_code}')
-                raise SystemExit(f'HTTP Reason: {http_reason}, HTTP Code {http_code}')
+            check_code(http_code, http_reason, url_job_status)
             xml_et = ETree.fromstring(xml_job_status)
             job_status_desc = xml_et.find('status_desc').text
             logging.debug(f'job_status_desc -> {job_status_desc}')
@@ -72,10 +73,8 @@ async def main(conf: dict, num_try: int = 5) -> None:
                 await asyncio.sleep(1)
                 logging.debug(f'Trying to re-run Job (attempt {idx+1}): HTTP POST -> {url_run_job} '
                               f'job -> {conf["job-entry"]["job"]}')
-                _, http_code, http_reason = await fetch(session, url_run_job, req_run_job)
-                if http_code != 200:
-                    logging.debug(f'HTTP Reason: {http_reason}, HTTP Code {http_code}')
-                    raise SystemExit(f'HTTP Reason: {http_reason}, HTTP Code {http_code}')
+                xml_run_job, http_code, http_reason = await fetch(session, url_run_job, req_run_job)
+                check_code(http_code, http_reason, url_run_job)
 
         if run_status:
             logging.info(f"Job {conf['job-entry']['job']} executed successful")
@@ -85,12 +84,15 @@ async def main(conf: dict, num_try: int = 5) -> None:
 
 
 if __name__ == '__main__':
+    logging.getLogger('asyncio').setLevel(logging.INFO)
     try:
-        logging.getLogger('asyncio').setLevel(logging.INFO)
-        DEFAULT_LOG_FORMAT = '[%(levelname)1.1s %(asctime)s %(name)s %(module)s:%(lineno)d] %(message)s'
-        CONFIG = load_cfg(os.path.join(settings.PROJECT_DIR, 'etc', 'config.yml'))
+        if len(sys.argv) > 1:
+            CONFIG = load_cfg(os.path.abspath(sys.argv[1]))
+        else:
+            CONFIG = load_cfg(os.path.join(settings.PROJECT_DIR, 'etc', 'config.yml'))
+
         logging.basicConfig(level=logging.getLevelName(CONFIG['other']['log_level'].upper()),
-                            format=DEFAULT_LOG_FORMAT)
+                            format=settings.DEFAULT_LOG_FORMAT)
 
         loop = asyncio.get_event_loop()
         loop.run_until_complete(main(CONFIG))
