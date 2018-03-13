@@ -7,6 +7,7 @@ job-entry:
   user: admin
   pass: password
   level: Basic
-  job: /home/admin/services/odometer/Jobs/service_prediction
+  job_path: /home/admin/services/odometer/Jobs/
+  job_name: service_prediction
 other:
   log_level: debug

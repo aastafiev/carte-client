@@ -19,7 +19,7 @@ from typing import Tuple
 
 async def fetch(session: aiohttp.ClientSession, url: str, body: str) -> Tuple[str, int, str]:
     async with session.post(url=url, data=body) as response:
-        return await response.text(), int(response.status), response.reason
+        return await response.text(), response.status, response.reason
 
 
 async def main(conf: dict, num_try: int = 5) -> None:
@@ -36,8 +36,10 @@ async def main(conf: dict, num_try: int = 5) -> None:
     url_run_job = '{}/kettle/startJob/'.format(conf['carte-master']['url'])
 
     async with aiohttp.ClientSession(headers=headers, auth=auth) as session:
-        logging.info(f"Running Job: HTTP POST -> {url_execute_job}, job -> {conf['job-entry']['job']}")
-        req_execute_job = 'rep={rep}&job={job}&user={user}&pass={pass}&level={level}'.format(**conf['job-entry'])
+        full_job_name = ''.join([conf['job-entry']['job_path'], conf['job-entry']['job_name']])
+        logging.info(f"Running Job: HTTP POST -> {url_execute_job}, job -> {full_job_name}")
+        req_execute_job = 'job={}&rep={rep}&user={user}&pass={pass}&level={level}'.format(full_job_name,
+                                                                                          **conf['job-entry'])
         xml_run_job, http_code, http_reason = await fetch(session, url_execute_job, req_execute_job)
         check_code(http_code, http_reason, url_execute_job)
         xml_et = ETree.fromstring(xml_run_job)
@@ -47,18 +49,18 @@ async def main(conf: dict, num_try: int = 5) -> None:
         logging.debug(f'carte_result -> {carte_result}, carte_msg -> {carte_msg}, carte_job_id -> {carte_job_id}')
 
         if carte_result != 'OK':
-            logging.debug(f"The job ({conf['job-entry']['job']}) couldn't run: {carte_msg}")
-            raise SystemExit(f"The job ({conf['job-entry']['job']}) couldn't run: {carte_msg}")
+            logging.debug(f"The job ({full_job_name}) couldn't run: {carte_msg}")
+            raise SystemExit(f"The job ({full_job_name}) couldn't run: {carte_msg}")
 
-        req_job_status = 'xml=Y&id={}'.format(carte_job_id)
-        req_run_job = 'xml=Y&id={}'.format(carte_job_id)
-        logging.debug('Waiting 5 sec')
-        await asyncio.sleep(5)
+        req_job_status = 'xml=Y&id={}&name={}'.format(carte_job_id, conf['job-entry']['job_name'])
+        req_run_job = 'xml=Y&id={}&name={}'.format(carte_job_id, conf['job-entry']['job_name'])
 
         run_status = False
         for idx in range(num_try):
+            logging.debug('Waiting 5 sec')
+            await asyncio.sleep(5)
             logging.debug(f'Checking Job status (attempt {idx+1}): HTTP POST -> {url_job_status}, '
-                          f'job -> {conf["job-entry"]["job"]}')
+                          f'job -> {full_job_name}')
             xml_job_status, http_code, http_reason = await fetch(session, url_job_status, req_job_status)
             check_code(http_code, http_reason, url_job_status)
             xml_et = ETree.fromstring(xml_job_status)
@@ -69,15 +71,13 @@ async def main(conf: dict, num_try: int = 5) -> None:
                 run_status = True
                 break
             else:
-                logging.debug('Waiting 1 sec')
-                await asyncio.sleep(1)
                 logging.debug(f'Trying to re-run Job (attempt {idx+1}): HTTP POST -> {url_run_job} '
-                              f'job -> {conf["job-entry"]["job"]}')
-                xml_run_job, http_code, http_reason = await fetch(session, url_run_job, req_run_job)
+                              f'job -> {full_job_name}')
+                _, http_code, http_reason = await fetch(session, url_run_job, req_run_job)
                 check_code(http_code, http_reason, url_run_job)
 
         if run_status:
-            logging.info(f"Job {conf['job-entry']['job']} executed successful")
+            logging.info(f"Job {full_job_name} executed successful")
         else:
             logging.info(f'Failed to run Job (attempt {idx+1})')
             raise SystemExit(f'Failed to run Job (attempt {idx+1})')
